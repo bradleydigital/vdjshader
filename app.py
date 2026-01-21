@@ -205,28 +205,37 @@ def _make_local_texture_name(path: str) -> str:
 
 def _fix_metal_keyword_conflicts(code: str) -> str:
     """
-    Automatically renames variables/parameters that conflict with Metal keywords.
-    Metal keywords: or, and, not, xor, new
+    Automatically renames variables/parameters and function names that conflict with Metal keywords.
+    Metal keywords: or, and, not, xor, new, char
     
     Only renames if we find actual declarations. Uses word boundaries to avoid
     replacing operators (||, &&) or keywords in comments/strings.
     """
-    metal_keywords = ["or", "and", "not", "xor", "new"]
+    metal_keywords = ["or", "and", "not", "xor", "new", "char"]
     rename_map = {}
     
-    # Find all variable/parameter declarations that use Metal keywords
-    # Pattern: type keyword (e.g., "float or", "int and", "vec2 not")
-    # Also match in function parameters: (float or, ...)
+    # Find all function declarations and variable/parameter declarations that use Metal keywords
     for keyword in metal_keywords:
-        # Match type declarations: float/int/vec*/mat*/bool followed by the keyword
-        # This matches: "float or", "vec2 new", etc. in declarations
-        pattern = r'\b(float|int|vec[234]|mat[234]|bool|sampler2D)\s+(' + re.escape(keyword) + r')\b'
+        # Match function declarations: return_type keyword( (e.g., "float char(", "void char(")
+        # This matches: "float char(", "vec2 new(", etc. in function declarations
+        pattern = r'\b(float|int|vec[234]|mat[234]|bool|sampler2D|void)\s+(' + re.escape(keyword) + r')\s*\('
+        matches = re.finditer(pattern, code)
+        
+        for match in matches:
+            var_or_func_name = match.group(2)
+            if var_or_func_name not in rename_map:
+                # Create a safe replacement name (e.g., "or" -> "or_metal", "char" -> "char_metal")
+                new_name = f"{var_or_func_name}_metal"
+                rename_map[var_or_func_name] = new_name
+        
+        # Also match variable/parameter declarations: type keyword (without parenthesis)
+        # Pattern: type keyword (e.g., "float or", "int and", "vec2 not")
+        pattern = r'\b(float|int|vec[234]|mat[234]|bool|sampler2D)\s+(' + re.escape(keyword) + r')\b(?!\s*\()'
         matches = re.finditer(pattern, code)
         
         for match in matches:
             var_name = match.group(2)
             if var_name not in rename_map:
-                # Create a safe replacement name (e.g., "or" -> "or_metal")
                 new_name = f"{var_name}_metal"
                 rename_map[var_name] = new_name
     
@@ -239,9 +248,10 @@ def _fix_metal_keyword_conflicts(code: str) -> str:
     # Use word boundaries to avoid partial matches and operator conflicts
     # Word boundary \b ensures we don't match:
     # - Operators: || (logical OR), && (logical AND)
-    # - Part of other words: "newValue" won't match "new"
+    # - Part of other words: "newValue" won't match "new", "character" won't match "char"
     for old_name, new_name in rename_map.items():
-        # Replace all occurrences of the variable name, ensuring word boundaries
+        # Replace all occurrences of the variable/function name, ensuring word boundaries
+        # For function calls, we want to match "char(" but not "character("
         code = re.sub(r'\b' + re.escape(old_name) + r'\b', new_name, code)
     
     return code
@@ -515,7 +525,7 @@ def package_vdjshader_bytes(
 st.set_page_config(page_title="Shadertoy → VirtualDJ (.vdjshader)", layout="wide")
 st.title("Shadertoy → VirtualDJ .vdjshader exporter")
 
-# Add CSS for sticky left column
+# Add CSS for sticky left column and button alignment
 st.markdown("""
 <style>
     .stColumn:first-child {
@@ -526,6 +536,15 @@ st.markdown("""
         align-self: start;
         max-height: calc(100vh - 2rem);
         overflow-y: auto;
+    }
+    /* Align buttons in columns to same height */
+    div[data-testid="column"] > div:first-child {
+        display: flex;
+        align-items: flex-start;
+    }
+    div[data-testid="column"] button,
+    div[data-testid="column"] a[download] {
+        margin-top: 0;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -635,6 +654,16 @@ with col_right:
 if "warning_rules" not in st.session_state:
     st.session_state.warning_rules = load_warning_rules()
 
+# Initialize session state for generated shader
+if "vdjshader_bytes" not in st.session_state:
+    st.session_state.vdjshader_bytes = None
+if "vdjshader_filename" not in st.session_state:
+    st.session_state.vdjshader_filename = None
+if "vdj_xml" not in st.session_state:
+    st.session_state.vdj_xml = None
+if "vdj_json" not in st.session_state:
+    st.session_state.vdj_json = None
+
 warning_rules: List[WarningRule] = st.session_state.warning_rules
 warning_matches: List[WarningMatch] = []
 
@@ -734,100 +763,81 @@ with col_right:
         else:
             uploaded_textures = None
 
-        if st.button("Generate .vdjshader", type="primary"):
-            try:
-                parsed = json.loads(raw)
-                
-                # Get shadertoy ID for filename
-                root = _ensure_shader_root(parsed)
-                shadertoy_id = root.get("info", {}).get("id") or "vdjshader"
-                
-                # Process manually uploaded textures
-                manual_textures_dict = {}
-                if uploaded_textures:
-                    # Extract texture paths from JSON to match against
-                    renderpasses = root.get("renderpass", [])
-                    texture_paths_map = {}
-                    for rp in renderpasses:
-                        for inp in rp.get("inputs", []) or []:
-                            if inp.get("type") == "texture":
-                                fp = inp.get("filepath") or inp.get("src")
-                                if fp:
-                                    # Store by basename for matching
-                                    basename = os.path.basename(fp)
-                                    texture_paths_map[basename] = fp
+        col_gen, col_download = st.columns([1, 1])
+        
+        with col_gen:
+            if st.button("Generate .vdjshader", type="primary", use_container_width=True, key="generate_btn"):
+                try:
+                    parsed = json.loads(raw)
                     
-                    # Match uploaded files to texture paths
-                    for uploaded_file in uploaded_textures:
-                        uploaded_basename = uploaded_file.name
-                        # Try to find matching texture path
-                        for tex_basename, tex_path in texture_paths_map.items():
-                            if uploaded_basename == tex_basename or uploaded_basename.endswith(tex_basename):
-                                manual_textures_dict[tex_path] = uploaded_file.read()
-                                break
-                
-                vdj_json, vdj_xml, assets = build_vdj_from_shadertoy(
-                    parsed,
-                    vdj_id_override=None,
-                    embed_textures=embed_textures,
-                    manual_textures=manual_textures_dict if manual_textures_dict else None,
-                    compatibility_mode=compatibility_mode,
-                )
+                    # Get shadertoy ID for filename
+                    root = _ensure_shader_root(parsed)
+                    shadertoy_id = root.get("info", {}).get("id") or "vdjshader"
+                    
+                    # Process manually uploaded textures
+                    manual_textures_dict = {}
+                    if uploaded_textures:
+                        # Extract texture paths from JSON to match against
+                        renderpasses = root.get("renderpass", [])
+                        texture_paths_map = {}
+                        for rp in renderpasses:
+                            for inp in rp.get("inputs", []) or []:
+                                if inp.get("type") == "texture":
+                                    fp = inp.get("filepath") or inp.get("src")
+                                    if fp:
+                                        # Store by basename for matching
+                                        basename = os.path.basename(fp)
+                                        texture_paths_map[basename] = fp
+                        
+                        # Match uploaded files to texture paths
+                        for uploaded_file in uploaded_textures:
+                            uploaded_basename = uploaded_file.name
+                            # Try to find matching texture path
+                            for tex_basename, tex_path in texture_paths_map.items():
+                                if uploaded_basename == tex_basename or uploaded_basename.endswith(tex_basename):
+                                    manual_textures_dict[tex_path] = uploaded_file.read()
+                                    break
+                    
+                    vdj_json, vdj_xml, assets = build_vdj_from_shadertoy(
+                        parsed,
+                        vdj_id_override=None,
+                        embed_textures=embed_textures,
+                        manual_textures=manual_textures_dict if manual_textures_dict else None,
+                        compatibility_mode=compatibility_mode,
+                    )
 
-                vdjshader_bytes = package_vdjshader_bytes(vdj_json, vdj_xml, assets, shadertoy_id)
+                    vdjshader_bytes = package_vdjshader_bytes(vdj_json, vdj_xml, assets, shadertoy_id)
+                    
+                    # Store in session state
+                    st.session_state.vdjshader_bytes = vdjshader_bytes
+                    st.session_state.vdjshader_filename = f"{shadertoy_id}.vdjshader"
+                    st.session_state.vdj_xml = vdj_xml
+                    st.session_state.vdj_json = vdj_json
+                    
+                    st.success("Generated successfully.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Failed: {e}")
 
-                st.success("Generated successfully.")
+        with col_download:
+            if st.session_state.vdjshader_bytes:
                 st.download_button(
                     label="Download .vdjshader",
-                    data=vdjshader_bytes,
-                    file_name=f"{shadertoy_id}.vdjshader",
+                    data=st.session_state.vdjshader_bytes,
+                    file_name=st.session_state.vdjshader_filename,
                     mime="application/zip",
+                    use_container_width=True,
+                    key="download_btn",
                 )
+            else:
+                st.button("Download .vdjshader", disabled=True, use_container_width=True, key="download_btn_disabled")
+        
+        if st.session_state.vdjshader_bytes:
+            with st.expander("Preview generated shader.xml"):
+                st.code(st.session_state.vdj_xml, language="xml")
 
-                with st.expander("Preview generated shader.xml"):
-                    st.code(vdj_xml, language="xml")
-
-                with st.expander("Preview generated shader.json (minified)"):
-                    st.code(json.dumps(vdj_json, ensure_ascii=False, separators=(",", ":"))[:5000] + "\n...", language="json")
-
-            except Exception as e:
-                st.error(f"Failed: {e}")
-            st.markdown(r"""
-            **After downloading, place the `.vdjshader` file in VirtualDJ's shader folder:**
-            
-            **macOS (Intel):**
-            ```
-            ~/Library/Application Support/VirtualDJ/Plugins/Shaders/
-            ```
-            Or alternatively:
-            ```
-            ~/Documents/VirtualDJ/Plugins/Shaders/
-            ```
-            
-        **macOS (Apple Silicon / ARM):**
-        ```
-        ~/Library/Application Support/VirtualDJ/PluginsMacArm/Visualisations/
-        ```
-        Or alternatively (if using Rosetta 2):
-        ```
-        ~/Library/Application Support/VirtualDJ/Plugins/Shaders/
-        ```
-        *Note: On Apple Silicon, VirtualDJ typically uses the `PluginsMacArm/Visualisations/` path.*
-            
-            **Windows:**
-            ```
-            C:\Users\[YourUsername]\Documents\VirtualDJ\Plugins\Shaders\
-            ```
-            Or alternatively:
-            ```
-            %APPDATA%\VirtualDJ\Plugins\Shaders\
-            ```
-            
-        **After placing the file:**
-        - Restart VirtualDJ if it's running
-        - VirtualDJ may show a popup asking to re-download the shader - **press "Yes"** (it will just re-generate it, not actually download)
-        - The shader should appear in VirtualDJ's shader list
-        """)
+            with st.expander("Preview generated shader.json (minified)"):
+                st.code(json.dumps(st.session_state.vdj_json, ensure_ascii=False, separators=(",", ":"))[:5000] + "\n...", language="json")
 
 # Add installation instructions to left column
 with col_left:
