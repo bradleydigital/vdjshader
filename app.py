@@ -528,6 +528,27 @@ st.markdown("""
         max-height: calc(100vh - 2rem);
         overflow-y: auto;
     }
+    /* Dark mode support */
+    [data-theme="dark"] .stColumn:first-child {
+        background-color: #262730;
+        color: #fafafa;
+    }
+    [data-theme="dark"] .stColumn:first-child * {
+        color: #fafafa;
+    }
+    [data-theme="dark"] .stColumn:first-child h3 {
+        color: #fafafa;
+    }
+    [data-theme="dark"] .stColumn:first-child p {
+        color: #fafafa;
+    }
+    [data-theme="dark"] .stColumn:first-child strong {
+        color: #fafafa;
+    }
+    [data-theme="dark"] .stColumn:first-child code {
+        background-color: #1e1e1e;
+        color: #d4d4d4;
+    }
 </style>
 """, unsafe_allow_html=True)
 
