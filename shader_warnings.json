@@ -1,0 +1,82 @@
+[
+  {
+    "id": "err_layout_location_required",
+    "title": "Custom uniform needs layout(location=...)",
+    "kind": "error",
+    "pattern": "non-opaque uniform variables need a layout\\(location=",
+    "message": "VirtualDJ's shader compiler requires explicit layout(location=...) for some custom non-sampler uniforms. If the shader declares custom uniforms (e.g. iCamPosX), it may fail.",
+    "scope": "macos_metal"
+  },
+  {
+    "id": "err_overlapping_location",
+    "title": "Overlapping use of layout(location)",
+    "kind": "error",
+    "pattern": "overlapping use of location",
+    "message": "VirtualDJ generated conflicting layout(location=...) bindings while compiling this shader. This is usually caused by an incompatibility between the shader and VirtualDJ's generated header/bindings.",
+    "scope": "macos_metal"
+  },
+  {
+    "id": "err_missing_entry_point",
+    "title": "Missing entry point",
+    "kind": "error",
+    "pattern": "Missing entry point",
+    "message": "VirtualDJ couldn't find an entry point when linking the fragment stage. This often happens after a compile error earlier in the log.",
+    "scope": "generic"
+  },
+  {
+    "id": "err_metal_new_not_supported",
+    "title": "Metal: 'new' not supported",
+    "kind": "error",
+    "pattern": "'new' is not supported in Metal",
+    "message": "Metal backend rejected the generated shader because it contains `new`, which is not supported.",
+    "scope": "macos_metal"
+  },
+  {
+    "id": "src_array_uniform_ichannel_time",
+    "title": "Uses iChannelTime[] array",
+    "kind": "source",
+    "pattern": "\\biChannelTime\\s*\\[",
+    "message": "Shader references iChannelTime[] (array uniform). Some VirtualDJ/Metal compiler paths fail on array uniform usage.",
+    "scope": "macos_metal"
+  },
+  {
+    "id": "src_array_uniform_ichannel_resolution",
+    "title": "Uses iChannelResolution[] array",
+    "kind": "source",
+    "pattern": "\\biChannelResolution\\s*\\[",
+    "message": "Shader references iChannelResolution[] (array uniform). Some VirtualDJ/Metal compiler paths fail on array uniform usage.",
+    "scope": "macos_metal"
+  },
+  {
+    "id": "src_uses_iframerate",
+    "title": "Uses iFrameRate (may be undefined in VirtualDJ)",
+    "kind": "source",
+    "pattern": "\\biFrameRate\\b",
+    "message": "Shader references iFrameRate, which may not be provided by VirtualDJ. Enable Compatibility mode to replace iFrameRate with 60.0 during export.",
+    "scope": "generic"
+  },
+  {
+    "id": "src_custom_uniform_icamposx",
+    "title": "Custom uniform iCamPosX",
+    "kind": "source",
+    "pattern": "\\buniform\\s+(?:highp|mediump|lowp\\s+)?(?:float|vec[234]|mat[234])\\s+iCamPosX\\b",
+    "message": "Shader declares custom uniform iCamPosX. VirtualDJ may require explicit layout(location=...) for custom non-sampler uniforms.",
+    "scope": "macos_metal"
+  },
+  {
+    "id": "err_metal_expected_expression",
+    "title": "Metal: Expected expression (keyword conflict)",
+    "kind": "error",
+    "pattern": "expected expression",
+    "message": "Metal compiler expected an expression but found a keyword. This often happens when shader code uses Metal keywords (like 'or', 'and', 'not', 'xor') as variable names.",
+    "scope": "macos_metal"
+  },
+  {
+    "id": "err_metal_undeclared_identifier",
+    "title": "Metal: Undeclared identifier",
+    "kind": "error",
+    "pattern": "use of undeclared identifier",
+    "message": "Metal compiler found an undeclared identifier. This can happen when variable names conflict with Metal keywords or when scope is incorrect.",
+    "scope": "macos_metal"
+  }
+]
