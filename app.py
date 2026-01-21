@@ -515,34 +515,122 @@ def package_vdjshader_bytes(
 st.set_page_config(page_title="Shadertoy → VirtualDJ (.vdjshader)", layout="wide")
 st.title("Shadertoy → VirtualDJ .vdjshader exporter")
 
-st.write(
-    "Paste the Shadertoy export JSON you copied from DevTools (Network → the API response containing `info` + `renderpass`). "
-    "This app will generate a VirtualDJ `.vdjshader` file (shader.json + shader.xml + embedded textures)."
-)
+# Add CSS for sticky left column with grey background
+st.markdown("""
+<style>
+    .stColumn:first-child {
+        background-color: #f0f0f0;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        position: sticky;
+        top: 1rem;
+        align-self: start;
+        max-height: calc(100vh - 2rem);
+        overflow-y: auto;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-def _on_raw_change() -> None:
-    # Triggered when Streamlit registers a change for the text area.
-    # Note: Streamlit's built-in textarea updates on blur / Ctrl+Enter.
-    st.session_state["_raw_last_edited"] = True
+# Create 2-column layout
+col_left, col_right = st.columns([1, 1.5])
 
+with col_left:
+    st.markdown("### 📖 Instructions")
+    
+    st.markdown("""
+    **Get Shadertoy JSON using one of these methods:**
+    
+    **Method 1: Bookmarklet (Easier)** - Use the bookmarklet below to get JSON with one click.
+    
+    **Method 2: DevTools** - Open DevTools (F12), go to Network tab, visit a Shadertoy shader page, find the XHR request to `/shadertoy`, right-click it → "Copy response", then paste below.
+    
+    This app will generate a VirtualDJ `.vdjshader` file (shader.json + shader.xml + embedded textures).
+    """)
+    
+    # Bookmarklet section
+    with st.expander("📌 Quick Import Bookmarklet (Easier Method)", expanded=False):
+        st.markdown("""
+        **Easier way to get Shadertoy JSON:**
+        
+        1. Copy the bookmarklet code below (click the "Copy Code" button)
+        2. Create a new bookmark in your browser (Ctrl+Shift+B / Cmd+Shift+B to show bookmarks bar)
+        3. Right-click the bookmarks bar → "Add page" or "New bookmark"
+        4. Paste the copied code as the **URL** (name it "Get Shadertoy JSON" or similar)
+        5. Go to any Shadertoy shader page (e.g., `https://www.shadertoy.com/view/XXXX`)
+        6. Click the bookmarklet in your bookmarks bar
+        7. A popup will appear with the JSON - click "Copy"
+        8. Paste it into the text area on the right
+        """)
+        
+        bookmarklet_code = """javascript:(async()=>{const getId=()=>{const m=location.pathname.match(/\/view\/([A-Za-z0-9_]+)/);return m?m[1]:null};const id=getId();if(!id){alert("Not on a Shadertoy /view/XXXX page.");return;}const body=new URLSearchParams({s:JSON.stringify({shaders:[id]}),nt:"1",nl:"1",np:"1"});let txt="";try{const r=await fetch("/shadertoy",{method:"POST",headers:{"content-type":"application/x-www-form-urlencoded; charset=UTF-8"},body,credentials:"same-origin"});txt=await r.text();if(!r.ok){throw new Error(`HTTP ${r.status}: ${txt.slice(0,200)}`);} }catch(e){alert("Failed to fetch shader JSON:\n"+e.message);return;}let pretty=txt;try{pretty=JSON.stringify(JSON.parse(txt),null,2);}catch(_){}const d=document.createElement("div");d.style.cssText="position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:24px";const c=document.createElement("div");c.style.cssText="background:#111;color:#eee;max-width:1100px;width:100%;max-height:85vh;border:1px solid #333;border-radius:12px;box-shadow:0 20px 70px rgba(0,0,0,.6);overflow:hidden;font:14px/1.35 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial";const h=document.createElement("div");h.style.cssText="display:flex;gap:10px;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #222";h.innerHTML=`<div style="font-weight:600">Shadertoy JSON: ${id}</div>`;const b=document.createElement("div");const copy=document.createElement("button");copy.textContent="Copy";copy.style.cssText="padding:7px 10px;border-radius:8px;border:1px solid #333;background:#1f1f1f;color:#eee;cursor:pointer";const close=document.createElement("button");close.textContent="Close";close.style.cssText="padding:7px 10px;border-radius:8px;border:1px solid #333;background:#1f1f1f;color:#eee;cursor:pointer";b.append(copy,close);h.append(b);const ta=document.createElement("textarea");ta.value=pretty;ta.style.cssText="width:100%;height:70vh;box-sizing:border-box;padding:14px;border:0;outline:none;background:#0b0b0b;color:#eaeaea;font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;white-space:pre";copy.onclick=async()=>{try{await navigator.clipboard.writeText(ta.value);copy.textContent="Copied!";setTimeout(()=>copy.textContent="Copy",1200);}catch(e){ta.select();document.execCommand("copy");copy.textContent="Copied!";setTimeout(()=>copy.textContent="Copy",1200);}};close.onclick=()=>d.remove();c.append(h,ta);d.append(c);d.addEventListener("click",(e)=>{if(e.target===d)d.remove()});document.documentElement.append(d);})()"""
+        
+        # Display bookmarklet code in a text area with copy button
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            bookmarklet_text = st.text_area(
+                "Bookmarklet code:",
+                value=bookmarklet_code,
+                height=120,
+                key="bookmarklet_code",
+                label_visibility="collapsed"
+            )
+        with col2:
+            st.write("")  # Spacing
+            st.write("")  # Spacing
+            if st.button("📋 Copy Code", use_container_width=True, key="copy_bookmarklet"):
+                # Use JavaScript to copy to clipboard via components
+                import streamlit.components.v1 as components
+                copy_script = f'''
+                <script>
+                navigator.clipboard.writeText({json.dumps(bookmarklet_code)}).then(function() {{
+                    alert('Bookmarklet code copied! Now create a bookmark and paste this as the URL.');
+                }});
+                </script>
+                '''
+                components.html(copy_script, height=0)
+                st.success("Code copied! Create a bookmark and paste it as the URL.")
+        
+        st.caption("💡 After copying, create a new bookmark and paste the code as the URL field")
 
-raw = st.text_area(
-    "Paste Shadertoy JSON here",
-    height=320,
-    placeholder='Paste the JSON response (can be a list or {"Shader":...})',
-    key="raw_json",
-    on_change=_on_raw_change,
-)
-st.caption("Tip: press Ctrl+Enter to apply changes without clicking outside the text area.")
+    # DevTools method section
+    with st.expander("🔧 Alternative: DevTools Method", expanded=False):
+        st.markdown("""
+        **Using browser DevTools:**
+        
+        1. Open DevTools (F12 or Right-click → Inspect)
+        2. Go to the **Network** tab
+        3. Visit a Shadertoy shader page (e.g., `https://www.shadertoy.com/view/XXXX`)
+        4. In the Network tab, filter by **XHR** or search for `/shadertoy`
+        5. Find the request to `/shadertoy` (it should be a POST request)
+        6. Right-click on the request → **"Copy response"** (or "Copy" → "Copy response")
+        7. Paste the copied JSON into the text area on the right
+        """)
 
-embed_textures = st.checkbox("Download + embed textures from Shadertoy", value=True)
+with col_right:
+    st.markdown("### ✏️ Converter")
+    
+    def _on_raw_change() -> None:
+        # Triggered when Streamlit registers a change for the text area.
+        # Note: Streamlit's built-in textarea updates on blur / Ctrl+Enter.
+        st.session_state["_raw_last_edited"] = True
 
-# Auto-fixes for known VirtualDJ/Metal incompatibilities (optional)
-compatibility_mode = st.checkbox(
-    "Compatibility mode (auto-fix common Metal issues)",
-    value=False,
-    help="When enabled: rewrites iChannelTime[n] -> iTime and iChannelResolution[n] -> iResolution to avoid certain VirtualDJ/Metal compilation failures.",
-)
+    raw = st.text_area(
+        "Paste Shadertoy JSON here",
+        height=320,
+        placeholder='Paste the JSON response (can be a list or {"Shader":...})',
+        key="raw_json",
+        on_change=_on_raw_change,
+    )
+    st.caption("Tip: press Ctrl+Enter to apply changes without clicking outside the text area.")
+
+    embed_textures = st.checkbox("Download + embed textures from Shadertoy", value=True)
+
+    # Auto-fixes for known VirtualDJ/Metal incompatibilities (optional)
+    compatibility_mode = st.checkbox(
+        "Compatibility mode (auto-fix common Metal issues)",
+        value=False,
+        help="When enabled: rewrites iChannelTime[n] -> iTime and iChannelResolution[n] -> iResolution to avoid certain VirtualDJ/Metal compilation failures.",
+    )
 
 # ------------------ Live compatibility warnings ------------------
 if "warning_rules" not in st.session_state:
@@ -564,135 +652,213 @@ if raw:
     except Exception:
         parsed = None
 
-st.divider()
-st.subheader("Compatibility warnings (informational)")
-st.caption("These warnings are heuristics based on patterns from shaders that failed to compile in VirtualDJ.")
-
-if warning_matches:
-    # de-dup by (rule_id, where)
-    seen = set()
-    deduped: List[WarningMatch] = []
-    for m in warning_matches:
-        key = (m.rule_id, m.where)
-        if key in seen:
-            continue
-        seen.add(key)
-        deduped.append(m)
-
-    by_scope: Dict[str, List[WarningMatch]] = {}
-    for m in deduped:
-        by_scope.setdefault(m.scope or "generic", []).append(m)
-
-    for scope_key in ["macos_metal", "generic"]:
-        if scope_key not in by_scope:
-            continue
-        st.warning(f'{WARNING_SCOPE_LABELS.get(scope_key, scope_key)} warnings')
-        for m in by_scope[scope_key]:
-            where_suffix = f" ({m.where})" if m.where else ""
-            st.markdown(f"- `{m.title}`{where_suffix}\n\n  {m.message}")
-else:
-    st.info("No known warning patterns detected yet.")
-
-# Extract texture info from JSON to show download buttons
-texture_paths = []
-if raw and parsed is not None:
-    try:
-        root = _ensure_shader_root(parsed)
-        renderpasses = root.get("renderpass", [])
-        seen_paths = set()
-        for rp in renderpasses:
-            for inp in rp.get("inputs", []) or []:
-                if inp.get("type") == "texture":
-                    fp = inp.get("filepath") or inp.get("src")
-                    if fp and fp not in seen_paths:
-                        texture_paths.append(fp)
-                        seen_paths.add(fp)
-    except:
-        pass
-
-# Show texture download buttons
-if texture_paths:
+with col_right:
     st.divider()
-    st.subheader("Textures")
-    st.caption("Download textures manually if automatic download fails, then upload them below.")
-    for tex_path in texture_paths:
-        tex_url = SHADERTOY_BASE + tex_path
-        tex_filename = os.path.basename(tex_path)
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            st.text(tex_filename)
-        with col2:
-            try:
-                st.link_button("Download", tex_url)
-            except:
-                st.markdown(f"[Download]({tex_url})")
-    
-    st.divider()
-    st.subheader("Upload Textures")
-    uploaded_textures = st.file_uploader(
-        "Upload texture files",
-        type=["jpg", "jpeg", "png", "gif", "bmp"],
-        accept_multiple_files=True,
-        help="Upload texture files you downloaded above. They will be matched by filename."
-    )
-else:
-    uploaded_textures = None
+    st.subheader("Compatibility warnings (informational)")
+    st.caption("These warnings are heuristics based on patterns from shaders that failed to compile in VirtualDJ.")
 
-if st.button("Generate .vdjshader", type="primary"):
-    try:
-        parsed = json.loads(raw)
-        
-        # Get shadertoy ID for filename
-        root = _ensure_shader_root(parsed)
-        shadertoy_id = root.get("info", {}).get("id") or "vdjshader"
-        
-        # Process manually uploaded textures
-        manual_textures_dict = {}
-        if uploaded_textures:
-            # Extract texture paths from JSON to match against
+    if warning_matches:
+        # de-dup by (rule_id, where)
+        seen = set()
+        deduped: List[WarningMatch] = []
+        for m in warning_matches:
+            key = (m.rule_id, m.where)
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(m)
+
+        by_scope: Dict[str, List[WarningMatch]] = {}
+        for m in deduped:
+            by_scope.setdefault(m.scope or "generic", []).append(m)
+
+        for scope_key in ["macos_metal", "generic"]:
+            if scope_key not in by_scope:
+                continue
+            st.warning(f'{WARNING_SCOPE_LABELS.get(scope_key, scope_key)} warnings')
+            for m in by_scope[scope_key]:
+                where_suffix = f" ({m.where})" if m.where else ""
+                st.markdown(f"- `{m.title}`{where_suffix}\n\n  {m.message}")
+    else:
+        st.info("No known warning patterns detected yet.")
+
+    # Extract texture info from JSON to show download buttons
+    texture_paths = []
+    if raw and parsed is not None:
+        try:
+            root = _ensure_shader_root(parsed)
             renderpasses = root.get("renderpass", [])
-            texture_paths_map = {}
+            seen_paths = set()
             for rp in renderpasses:
                 for inp in rp.get("inputs", []) or []:
                     if inp.get("type") == "texture":
                         fp = inp.get("filepath") or inp.get("src")
-                        if fp:
-                            # Store by basename for matching
-                            basename = os.path.basename(fp)
-                            texture_paths_map[basename] = fp
+                        if fp and fp not in seen_paths:
+                            texture_paths.append(fp)
+                            seen_paths.add(fp)
+        except:
+            pass
+
+        # Show texture download buttons
+        if texture_paths:
+            st.divider()
+            st.subheader("Textures")
+            st.caption("Download textures manually if automatic download fails, then upload them below.")
+            for tex_path in texture_paths:
+                tex_url = SHADERTOY_BASE + tex_path
+                tex_filename = os.path.basename(tex_path)
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.text(tex_filename)
+                with col2:
+                    try:
+                        st.link_button("Download", tex_url)
+                    except:
+                        st.markdown(f"[Download]({tex_url})")
             
-            # Match uploaded files to texture paths
-            for uploaded_file in uploaded_textures:
-                uploaded_basename = uploaded_file.name
-                # Try to find matching texture path
-                for tex_basename, tex_path in texture_paths_map.items():
-                    if uploaded_basename == tex_basename or uploaded_basename.endswith(tex_basename):
-                        manual_textures_dict[tex_path] = uploaded_file.read()
-                        break
+            st.divider()
+            st.subheader("Upload Textures")
+            uploaded_textures = st.file_uploader(
+                "Upload texture files",
+                type=["jpg", "jpeg", "png", "gif", "bmp"],
+                accept_multiple_files=True,
+                help="Upload texture files you downloaded above. They will be matched by filename."
+            )
+        else:
+            uploaded_textures = None
+
+        if st.button("Generate .vdjshader", type="primary"):
+            try:
+                parsed = json.loads(raw)
+                
+                # Get shadertoy ID for filename
+                root = _ensure_shader_root(parsed)
+                shadertoy_id = root.get("info", {}).get("id") or "vdjshader"
+                
+                # Process manually uploaded textures
+                manual_textures_dict = {}
+                if uploaded_textures:
+                    # Extract texture paths from JSON to match against
+                    renderpasses = root.get("renderpass", [])
+                    texture_paths_map = {}
+                    for rp in renderpasses:
+                        for inp in rp.get("inputs", []) or []:
+                            if inp.get("type") == "texture":
+                                fp = inp.get("filepath") or inp.get("src")
+                                if fp:
+                                    # Store by basename for matching
+                                    basename = os.path.basename(fp)
+                                    texture_paths_map[basename] = fp
+                    
+                    # Match uploaded files to texture paths
+                    for uploaded_file in uploaded_textures:
+                        uploaded_basename = uploaded_file.name
+                        # Try to find matching texture path
+                        for tex_basename, tex_path in texture_paths_map.items():
+                            if uploaded_basename == tex_basename or uploaded_basename.endswith(tex_basename):
+                                manual_textures_dict[tex_path] = uploaded_file.read()
+                                break
+                
+                vdj_json, vdj_xml, assets = build_vdj_from_shadertoy(
+                    parsed,
+                    vdj_id_override=None,
+                    embed_textures=embed_textures,
+                    manual_textures=manual_textures_dict if manual_textures_dict else None,
+                    compatibility_mode=compatibility_mode,
+                )
+
+                vdjshader_bytes = package_vdjshader_bytes(vdj_json, vdj_xml, assets, shadertoy_id)
+
+                st.success("Generated successfully.")
+                st.download_button(
+                    label="Download .vdjshader",
+                    data=vdjshader_bytes,
+                    file_name=f"{shadertoy_id}.vdjshader",
+                    mime="application/zip",
+                )
+
+                with st.expander("Preview generated shader.xml"):
+                    st.code(vdj_xml, language="xml")
+
+                with st.expander("Preview generated shader.json (minified)"):
+                    st.code(json.dumps(vdj_json, ensure_ascii=False, separators=(",", ":"))[:5000] + "\n...", language="json")
+
+            except Exception as e:
+                st.error(f"Failed: {e}")
+            st.markdown(r"""
+            **After downloading, place the `.vdjshader` file in VirtualDJ's shader folder:**
+            
+            **macOS (Intel):**
+            ```
+            ~/Library/Application Support/VirtualDJ/Plugins/Shaders/
+            ```
+            Or alternatively:
+            ```
+            ~/Documents/VirtualDJ/Plugins/Shaders/
+            ```
+            
+            **macOS (Apple Silicon / ARM):**
+            ```
+            ~/Library/Application Support/VirtualDJ/Plugins/Shaders/
+            ```
+            Or alternatively:
+            ```
+            ~/Documents/VirtualDJ/Plugins/Shaders/
+            ```
+            *Note: On Apple Silicon, VirtualDJ may use Rosetta 2 compatibility paths. Check both locations.*
+            
+            **Windows:**
+            ```
+            C:\Users\[YourUsername]\Documents\VirtualDJ\Plugins\Shaders\
+            ```
+            Or alternatively:
+            ```
+            %APPDATA%\VirtualDJ\Plugins\Shaders\
+            ```
+            
+        **After placing the file:**
+        - Restart VirtualDJ if it's running
+        - VirtualDJ may show a popup asking to re-download the shader - **press "Yes"** (it will just re-generate it, not actually download)
+        - The shader should appear in VirtualDJ's shader list
+        """)
+
+# Add installation instructions to left column
+with col_left:
+    st.divider()
+    with st.expander("📁 Where to install the .vdjshader file", expanded=False):
+        st.markdown(r"""
+        **After downloading, place the `.vdjshader` file in VirtualDJ's shader folder:**
         
-        vdj_json, vdj_xml, assets = build_vdj_from_shadertoy(
-            parsed,
-            vdj_id_override=None,
-            embed_textures=embed_textures,
-            manual_textures=manual_textures_dict if manual_textures_dict else None,
-            compatibility_mode=compatibility_mode,
-        )
-
-        vdjshader_bytes = package_vdjshader_bytes(vdj_json, vdj_xml, assets, shadertoy_id)
-
-        st.success("Generated successfully.")
-        st.download_button(
-            label="Download .vdjshader",
-            data=vdjshader_bytes,
-            file_name=f"{shadertoy_id}.vdjshader",
-            mime="application/zip",
-        )
-
-        with st.expander("Preview generated shader.xml"):
-            st.code(vdj_xml, language="xml")
-
-        with st.expander("Preview generated shader.json (minified)"):
-            st.code(json.dumps(vdj_json, ensure_ascii=False, separators=(",", ":"))[:5000] + "\n...", language="json")
-
-    except Exception as e:
-        st.error(f"Failed: {e}")
+        **macOS (Intel):**
+        ```
+        ~/Library/Application Support/VirtualDJ/Plugins/Shaders/
+        ```
+        Or alternatively:
+        ```
+        ~/Documents/VirtualDJ/Plugins/Shaders/
+        ```
+        
+        **macOS (Apple Silicon / ARM):**
+        ```
+        ~/Library/Application Support/VirtualDJ/Plugins/Shaders/
+        ```
+        Or alternatively:
+        ```
+        ~/Documents/VirtualDJ/Plugins/Shaders/
+        ```
+        *Note: On Apple Silicon, VirtualDJ may use Rosetta 2 compatibility paths. Check both locations.*
+        
+        **Windows:**
+        ```
+        C:\Users\[YourUsername]\Documents\VirtualDJ\Plugins\Shaders\
+        ```
+        Or alternatively:
+        ```
+        %APPDATA%\VirtualDJ\Plugins\Shaders\
+        ```
+        
+        **After placing the file:**
+        - Restart VirtualDJ if it's running
+        - VirtualDJ may show a popup asking to re-download the shader - **press "Yes"** (it will just re-generate it, not actually download)
+        - The shader should appear in VirtualDJ's shader list
+        """)
