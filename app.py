@@ -515,11 +515,10 @@ def package_vdjshader_bytes(
 st.set_page_config(page_title="Shadertoy → VirtualDJ (.vdjshader)", layout="wide")
 st.title("Shadertoy → VirtualDJ .vdjshader exporter")
 
-# Add CSS for sticky left column with grey background
+# Add CSS for sticky left column
 st.markdown("""
 <style>
     .stColumn:first-child {
-        background-color: #f0f0f0;
         padding: 1rem;
         border-radius: 0.5rem;
         position: sticky;
@@ -527,27 +526,6 @@ st.markdown("""
         align-self: start;
         max-height: calc(100vh - 2rem);
         overflow-y: auto;
-    }
-    /* Dark mode support */
-    [data-theme="dark"] .stColumn:first-child {
-        background-color: #262730;
-        color: #fafafa;
-    }
-    [data-theme="dark"] .stColumn:first-child * {
-        color: #fafafa;
-    }
-    [data-theme="dark"] .stColumn:first-child h3 {
-        color: #fafafa;
-    }
-    [data-theme="dark"] .stColumn:first-child p {
-        color: #fafafa;
-    }
-    [data-theme="dark"] .stColumn:first-child strong {
-        color: #fafafa;
-    }
-    [data-theme="dark"] .stColumn:first-child code {
-        background-color: #1e1e1e;
-        color: #d4d4d4;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -724,7 +702,15 @@ with col_right:
         if texture_paths:
             st.divider()
             st.subheader("Textures")
-            st.caption("Download textures manually if automatic download fails, then upload them below.")
+            st.markdown("""
+            **If automatic texture download fails, download and upload textures manually:**
+            
+            1. Click the **"Download"** button below for each texture to save it to your computer
+            2. After downloading all textures, scroll down to the **"Upload Textures"** section
+            3. Click **"Browse files"** and select all the texture files you just downloaded
+            4. The app will automatically match uploaded files to the shader's texture paths by filename
+            5. Then click **"Generate .vdjshader"** to create the file with your uploaded textures
+            """)
             for tex_path in texture_paths:
                 tex_url = SHADERTOY_BASE + tex_path
                 tex_filename = os.path.basename(tex_path)
@@ -818,15 +804,15 @@ with col_right:
             ~/Documents/VirtualDJ/Plugins/Shaders/
             ```
             
-            **macOS (Apple Silicon / ARM):**
-            ```
-            ~/Library/Application Support/VirtualDJ/Plugins/Shaders/
-            ```
-            Or alternatively:
-            ```
-            ~/Documents/VirtualDJ/Plugins/Shaders/
-            ```
-            *Note: On Apple Silicon, VirtualDJ may use Rosetta 2 compatibility paths. Check both locations.*
+        **macOS (Apple Silicon / ARM):**
+        ```
+        ~/Library/Application Support/VirtualDJ/PluginsMacArm/Visualisations/
+        ```
+        Or alternatively (if using Rosetta 2):
+        ```
+        ~/Library/Application Support/VirtualDJ/Plugins/Shaders/
+        ```
+        *Note: On Apple Silicon, VirtualDJ typically uses the `PluginsMacArm/Visualisations/` path.*
             
             **Windows:**
             ```
@@ -861,13 +847,13 @@ with col_left:
         
         **macOS (Apple Silicon / ARM):**
         ```
+        ~/Library/Application Support/VirtualDJ/PluginsMacArm/Visualisations/
+        ```
+        Or alternatively (if using Rosetta 2):
+        ```
         ~/Library/Application Support/VirtualDJ/Plugins/Shaders/
         ```
-        Or alternatively:
-        ```
-        ~/Documents/VirtualDJ/Plugins/Shaders/
-        ```
-        *Note: On Apple Silicon, VirtualDJ may use Rosetta 2 compatibility paths. Check both locations.*
+        *Note: On Apple Silicon, VirtualDJ typically uses the `PluginsMacArm/Visualisations/` path.*
         
         **Windows:**
         ```
